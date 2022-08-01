@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.2.32526.322
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MAPacificReportUtility", "MAPacificReportUtility\MAPacificReportUtility.csproj", "{7F44D177-0345-4684-9701-A1E108E08CE3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GraphAuthentication", "Authentication2\GraphAuthentication.csproj", "{8E2586A1-FE81-4F88-B648-39C3D51BBCD7}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7F44D177-0345-4684-9701-A1E108E08CE3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F44D177-0345-4684-9701-A1E108E08CE3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F44D177-0345-4684-9701-A1E108E08CE3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F44D177-0345-4684-9701-A1E108E08CE3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8E2586A1-FE81-4F88-B648-39C3D51BBCD7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8E2586A1-FE81-4F88-B648-39C3D51BBCD7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8E2586A1-FE81-4F88-B648-39C3D51BBCD7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8E2586A1-FE81-4F88-B648-39C3D51BBCD7}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F1D52999-A286-4F78-9C03-F3767A5D0588}
+	EndGlobalSection
+EndGlobal

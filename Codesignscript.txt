@@ -1,0 +1,5 @@
+C:\WinDDK\7600.16385.1\bin\x86\signtool sign /f "C:\Cert07\Cert2021\1qsts9emvtodnfrizomaeamlrqbl3vvf\CrystalPointSigningCert.pfx" /p "not2day" /tr "http://tsa.starfieldtech.com" MAPacificReportUtility.exe
+
+C:\WinDDK\7600.16385.1\bin\amd64\signtool sign /f "C:\Cert07\Cert2021\1qsts9emvtodnfrizomaeamlrqbl3vvf\CrystalPointSigningCert.pfx" /p "not2day" /tr "http://tsa.starfieldtech.com" MAPacificReportUtility.exe
+
+C:\Program Files (x86)\Windows Kits\8.1\bin\x86\signtool sign /f "C:\Cert07\Cert2021\1qsts9emvtodnfrizomaeamlrqbl3vvf\CrystalPointSigningCert.pfx" /p "not2day" /tr "http://tsa.starfieldtech.com" MAPacificReportUtility.exe

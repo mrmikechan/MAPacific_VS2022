@@ -1,0 +1,350 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using Microsoft.Exchange.WebServices.Data;
+using Authentication;
+
+using Microsoft.Graph;
+using GraphAuthentication;
+
+namespace MAPacificReportUtility
+{
+    /// <summary>
+    /// MailMessageDraft uses the EWS Managed API assembly file, Microsoft.Exchange.WebServices.dll to handle the
+    /// interfacing logic to Exchange Server 2007 SP1 or higher.
+    /// Requirements for using EWS Managed API assembly is that we need to use .NET Framework 4.
+    /// </summary>
+    class MailMessageDraftUtil
+    {
+        private Dictionary<string, EmailDraft> _draftList;
+
+        public delegate void ProgressChanged(int progress);
+        public event ProgressChanged updateProgress;
+
+
+        //Call GraphAPI via our graph service
+        private GraphHelper graphHelper;
+
+        public MailMessageDraftUtil()
+        {
+            _draftList = new Dictionary<string, EmailDraft>();
+            graphHelper = null;
+        }
+
+        /// <summary>
+        /// CreateDraftMail method creates new EmailDraft and adds it to the _draftList dictionary. 
+        /// </summary>
+        /// <param name="To">target to send the email</param>
+        /// <param name="Subject">email subject</param>
+        /// <param name="Body">email body</param>
+        /// <param name="attachment">file attachment</param>
+        public void CreateDraftEmail(String To, String Subject, String Body, String attachment)
+        {
+            //check to see if draft email exists...
+            if (_draftList.ContainsKey(To))
+            {
+                //it exists so we need to update the object and then insert it back into the dictionary.
+                EmailDraft msg = _draftList[To];
+                msg.Subject += Subject.Substring(Subject.IndexOf(":") + 1);
+                msg.Attachments.Add(attachment);
+                _draftList[To] = msg;
+            }
+            else
+            {
+                EmailDraft message = new EmailDraft();
+                message.To = To;
+                message.Subject = Subject;
+                message.Body = "Have a great day!" + System.Environment.NewLine + System.Environment.NewLine;
+                message.Body += "Accounting and Settlements";
+                message.Attachments.Add(attachment);
+                _draftList.Add(To, message);
+            }
+
+        }
+
+        /// <summary>
+        /// SaveDraftEmail runs through the dictionary and saves all email drafts into the user's Outlook draft folder.
+        /// </summary>
+        public async void SaveDraftEmail(GraphAuthentication.GraphHelper helper)
+        {
+            graphHelper = helper;
+
+            //3-27-22 MAP reported issue in which the Email Draft feature was not working anymore. It would appear that changes were made on Office365/Outlook365 requiring clients to use TLS12 to communicate with Exchange WebService.
+            System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12;
+
+            //converted Exchange.Web.Services related logic over to Microsoft.Graph.
+            Microsoft.Graph.Message msg;
+            if (_draftList.Count > 0)
+            {
+                //count used for the progress panel
+                int count = 0;
+                foreach (string keys in _draftList.Keys)
+                {
+                    try
+                    {
+                        count++;
+                                if (updateProgress != null)
+                                    updateProgress(count);                       
+
+
+                        msg = _draftList[keys].ConvertToEmailMessage(graphHelper);
+                        graphHelper.getClient().Me.Messages.Request().AddAsync(msg);
+                        
+                    }
+                    catch (Exception e)
+                    {
+                        if (_draftList[keys].To.Length == 0)
+                        {
+                            System.Windows.Forms.MessageBox.Show("Unable to Save Email Draft because there is no target email address: " + _draftList[keys].Subject, "Email Draft Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+                        }
+                        else
+                        {
+                            System.Windows.Forms.MessageBox.Show("Exception encountered in saving draft email: " + e.Message, "Email Draft Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+                        }
+                    }
+ 
+                }
+            }
+        }
+
+        /// <summary>
+        /// ResetList empties out the Dictionary containing the Email messages
+        /// </summary>
+        public void ResetList()
+        {
+            _draftList.Clear();
+        }
+
+        /// <summary>
+        /// isListEmpty returns true or false if there is any content in the dictionary list.
+        /// </summary>
+        /// <returns></returns>
+        public bool isListEmpty()
+        {
+            if (_draftList.Count <= 0)
+                return true;
+            else
+                return false;
+        }
+
+        /// <summary>
+        /// EmailListSize returns the number of email drafts in the Dictionary.
+        /// </summary>
+        /// <returns></returns>
+        public int EmailListSize()
+        {
+            return _draftList.Count;
+        }
+    }
+    /// <summary>
+    /// Class file to encapsulate data contained in a email.
+    /// </summary>
+    public class EmailDraft
+    {
+        public EmailDraft()
+        {
+            _attachments = new List<string>();
+        }
+
+        private string _to = "";
+        public string To
+        {
+            get { return _to; }
+            set { _to = value; }
+        }
+
+        private string _subject = "";
+        public string Subject
+        {
+            get { return _subject; }
+            set { _subject = value; }
+        }
+
+        private string _body = "";
+        public string Body
+        {
+            get { return _body; }
+            set { _body = value; }
+        }
+
+        private List<string> _attachments;
+        public List<string> Attachments
+        {
+            get { return _attachments; }
+            set { _attachments = value; }
+        }
+
+        //Deprecated method. No longer supported as we are using Microsoft.Graph instead for email.
+        /// <summary>
+        /// ConvertToEmailMessage takes the internal property and creates a EmailMessage with that information and returns it for use by the calling method.
+        /// </summary>
+        /// <param name="service"></param>
+        /// <returns>EmailMessage</returns>
+        public EmailMessage ConvertToEmailMessage(ExchangeService service)
+        {
+            EmailMessage message = new EmailMessage(service);
+            //VS6159 Fix Draft meail address issue. Sometines the address generated is not recognized as a valid email address by Outlook.  User has to retype the
+            //email address for it to be recognized.
+
+            //If email address is not a real address but a contact group name...
+            if (To.Contains("@")) //contact group name that is like a email address is the correct format for group name /distribution list.
+                message.ToRecipients.Add(new Microsoft.Exchange.WebServices.Data.EmailAddress(To));
+            else
+            {
+                //Unfortunately EWS for some odd reason is not able to recognize the email contact group name. It only thinks of it as a string and not an actual contact group name
+                //and therefore no address is associated with the group name placed into the email's To value. As a work around we have to find the contact group and then logically
+                //add each member's email address to the draft.
+                ItemView view = new ItemView(9999);
+                view.PropertySet = new PropertySet(BasePropertySet.IdOnly, ContactGroupSchema.DisplayName, ContactGroupSchema.DisplayTo);
+                FindItemsResults<Item> contactGroupItems = service.FindItems(WellKnownFolderName.Contacts, To, view);
+
+                if (contactGroupItems.Items.Count > 0)
+                {
+                    foreach (Item item in contactGroupItems)
+                    {
+                        if (item is ContactGroup)
+                        {
+
+                            ContactGroup myGroup = item as ContactGroup;
+
+                            ExpandGroupResults myGroupMembers = service.ExpandGroup(myGroup.Id);
+                            foreach (Microsoft.Exchange.WebServices.Data.EmailAddress address in myGroupMembers.Members)
+                            {
+                                message.ToRecipients.Add(address);
+
+                            }
+                        }
+                    }
+                }
+                else
+                {
+
+                    message.ToRecipients.Add(To);
+                }
+            }
+            message.Subject = Subject;
+            message.Body = Body;
+            message.Body.BodyType = Microsoft.Exchange.WebServices.Data.BodyType.Text;
+            foreach (string attch in Attachments)
+            {
+                message.Attachments.AddFileAttachment(attch);
+            }
+            return message;
+        }
+        /// <summary>
+        /// ConvertToEmailMessage function uses Microsoft.Graph to create a email draft and attach the pdf file to the message.
+        /// </summary>
+        /// <param name="graphHelper">Class that encapsulates the Microsoft.Graph function calls</param>
+        /// <returns>Microsoft.Graph.Message</returns>
+        /// <exception cref="System.NullReferenceException"></exception>
+        public Message ConvertToEmailMessage(GraphHelper graphHelper)
+        {
+            if (graphHelper == null)
+                throw new System.NullReferenceException("Graph has not been initialized for user auth");
+
+            GraphServiceClient userClient = graphHelper.getClient();
+            //    EmailMessage message = new EmailMessage(service);
+            Microsoft.Graph.Message message = new Message();
+            //VS6159 Fix Draft meail address issue. Sometines the address generated is not recognized as a valid email address by Outlook.  User has to retype the
+            //email address for it to be recognized.
+
+            //If email address is not a real address but a contact group name...
+            if (To.Contains("@")) //contact group name that is like a email address is the correct format for group name /distribution list.
+            {
+                message.ToRecipients = new Recipient[]
+                {
+                    new Recipient
+                    {
+                        EmailAddress = new Microsoft.Graph.EmailAddress
+                        {
+                            Address = To
+                        }
+                    }
+                };
+            }
+            //message.ToRecipients.Add(new Microsoft.Exchange.WebServices.Data.EmailAddress(To));
+            else
+            {
+                //Unfortunately EWS for some odd reason is not able to recognize the email contact group name. It only thinks of it as a string and not an actual contact group name
+                //and therefore no address is associated with the group name placed into the email's To value. As a work around we have to find the contact group and then logically
+                //add each member's email address to the draft.
+                //       ItemView view = new ItemView(9999);
+                //       view.PropertySet = new PropertySet(BasePropertySet.IdOnly, ContactGroupSchema.DisplayName, ContactGroupSchema.DisplayTo);
+                //       FindItemsResults<Item> contactGroupItems = service.FindItems(WellKnownFolderName.Contacts, To, view);
+
+                //MS Graph API to get all the Groups
+                //      IGraphServiceGroupsCollectionPage groupContactPage = graphHelper.GetContactGroups();
+    /* 
+                var groupContactPage = graphHelper.GetContactGroups();
+                var foundGroup = from contact in groupContactPage where (contact.DisplayName == To) select contact;
+                if (foundGroup != null)
+                {
+                    List<Recipient> recipientsList = new List<Recipient>();
+                    var group = foundGroup.ElementAt(0);
+                    var members = graphHelper.GetGroupMembers(group.Id);
+                    Recipient recipient;
+                    foreach (User member in members)
+                    {
+                        if (member.Mail != null)
+                        {
+                            recipient = new Recipient();
+                            recipient.EmailAddress.Address = member.Mail;
+                            recipientsList.Add(recipient);
+                        }
+                    }
+                    // var recipient = new Recipient();
+                    // recipient.EmailAddress = member.Mail;
+
+                    message.ToRecipients = recipientsList;
+                    // message.ToRecipients = "ms@f.com";
+                }
+*/
+//                else
+ //               {
+
+                    message.ToRecipients = new Recipient[]
+                    {
+                        new Recipient
+                        {
+                            EmailAddress = new Microsoft.Graph.EmailAddress
+                            {
+                                Address = To
+                            }
+                        }
+                    };
+
+ //               }
+
+                message.Subject = Subject;
+                message.Body = new ItemBody { ContentType = Microsoft.Graph.BodyType.Text };
+                message.Body.Content = Body;
+
+                MessageAttachmentsCollectionPage attachments = new MessageAttachmentsCollectionPage();
+                string contentType = "";
+                foreach (string attch in Attachments)
+                {
+                    if (attch.EndsWith("pdf"))
+                    {
+
+                        contentType = "application/pdf";
+                    }
+                    
+
+
+                        Microsoft.Graph.FileAttachment attachmentItem = new Microsoft.Graph.FileAttachment()
+                        {
+                            Name = System.IO.Path.GetFileName(attch),
+                            ContentBytes = System.IO.File.ReadAllBytes(attch),
+                            ContentType = contentType
+                        };
+                    attachments.Add(attachmentItem);
+                }
+
+                message.Attachments = attachments;
+
+            }
+            return message;
+        }
+    }
+}

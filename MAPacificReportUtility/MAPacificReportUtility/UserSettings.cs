@@ -4,11 +4,15 @@ using System.Text;
 using System.Configuration;
 using System.ComponentModel;
 using System.IO;
+using System.Xml.Linq;
 
 namespace MAPacificReportUtility
 {
     class UserSettings : INotifyPropertyChanged
     {
+        const string Config_FileName = "MAPReportUtility.config";
+        const string Path_Config_FileName = @"MAPReportUtility\MAPReportUtility.config";
+
         static UserSettings current;
         public static UserSettings Current
         {
@@ -33,6 +37,34 @@ namespace MAPacificReportUtility
             }
         }
 
+        /// <summary>
+        /// Correct the roaming settings file needed because sometimes the node "configSections" is missing from the config file.
+        /// </summary>
+        public static void CorrectRoamingSettingsFile()
+        {
+            const string NODE_NAME_CONFIGURATION = "configuration";
+            const string NODE_NAME_CONFIGSECTIONS = "configSections";
+            const string NODE_NAME_REPORTUTILITYSETTING = "ReportUtilitySettings";
+            const string ADDIN_EXE_FILENAME = "MAPacificReportUtility.exe";
+
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            //Use XDocument to load file and find the presence of the "configSections" node. If it does not exist, then add it to the file.
+            XDocument xDoc = XDocument.Load(Path.Combine(appData, Path_Config_FileName));
+            var configSectionsNode = xDoc.Element(NODE_NAME_CONFIGURATION).Element(NODE_NAME_CONFIGSECTIONS);
+
+            if (configSectionsNode != null)
+            {
+                return;
+            }
+            var reportUtilitySettingsNode = xDoc.Element(NODE_NAME_CONFIGURATION).Element(NODE_NAME_REPORTUTILITYSETTING);
+            var addInExeConfigFullFilename = AppDomain.CurrentDomain.BaseDirectory + ADDIN_EXE_FILENAME;
+            var configDefault = ConfigurationManager.OpenExeConfiguration(addInExeConfigFullFilename);
+            var xDocDefault = XDocument.Load(configDefault.FilePath);
+            configSectionsNode = xDocDefault.Element(NODE_NAME_CONFIGURATION).Element(NODE_NAME_CONFIGSECTIONS);
+            reportUtilitySettingsNode.AddBeforeSelf(configSectionsNode);
+            xDoc.Save(Path.Combine(appData, Path_Config_FileName));
+        }
+
         //Vista requires elevated priviliges in order to write to files stored in the C:\Program Files location.
         //To work around that, we will try to load the configuration file from the user's profile settings. If it does not exist, then
         //we will create a new one during run time when a save action occurs.
@@ -48,9 +80,28 @@ namespace MAPacificReportUtility
             //load the config file from the user
             try
             {
-                exeMap.ExeConfigFilename = "MAPReportUtility.config";
-                exeMap.RoamingUserConfigFilename = Path.Combine(appData, @"MAPReportUtility\MAPReportUtility.config");
+                exeMap.ExeConfigFilename = Config_FileName;
+                exeMap.RoamingUserConfigFilename = Path.Combine(appData, Path_Config_FileName);
                 config = ConfigurationManager.OpenMappedExeConfiguration(exeMap, ConfigurationUserLevel.PerUserRoaming);
+                //Fix for incompatible version of MapReportUtility.config file that is missing the <configsections> in the config file.
+                //manually add that section into the file.
+                //NOTE: For some unknown reason, the ConfigurationManager is not able to find the "configSections" node in the config file. This ends
+                //up causing problems when using custom configuration sections. We will manually fix this in the CorrectRoamingSettingsFile method.
+                ConfigurationSectionGroup configSections = config.GetSectionGroup("configSections");
+                if (configSections == null)
+                {
+                    CorrectRoamingSettingsFile();
+                    config = ConfigurationManager.OpenMappedExeConfiguration(exeMap, ConfigurationUserLevel.PerUserRoaming);
+                }
+
+
+                ReportUtilitySettingsSection reportSettingsSection = config.GetSection("ReportUtilitySettings") as ReportUtilitySettingsSection;
+                if(reportSettingsSection == null)
+                {
+                    reportSettingsSection = new ReportUtilitySettingsSection();
+                    reportSettingsSection.SectionInformation.AllowExeDefinition = ConfigurationAllowExeDefinition.MachineToRoamingUser;
+                    config.Sections.Add("ReportUtilitySettings", reportSettingsSection);
+                }
 
                 if (config != null)
                 {
@@ -62,7 +113,7 @@ namespace MAPacificReportUtility
             }
             catch (Exception)
             {
-                // log it somewhere
+                // ToDo: log it somewhere
             }
         }
 
@@ -72,8 +123,8 @@ namespace MAPacificReportUtility
             {
                 string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
                 ExeConfigurationFileMap exeMap = new ExeConfigurationFileMap();
-                exeMap.ExeConfigFilename = "MAPReportUtility.config";
-                exeMap.RoamingUserConfigFilename = Path.Combine(appData, @"MAPReportUtility\MAPReportUtility.config");
+                exeMap.ExeConfigFilename = Config_FileName;
+                exeMap.RoamingUserConfigFilename = Path.Combine(appData, Path_Config_FileName);
                 Configuration config = null;
 
                 try
@@ -203,6 +254,12 @@ namespace MAPacificReportUtility
 
     public class ReportUtilitySettingsSection : ConfigurationSection
     {
+        /// <summary>
+        /// name of the section in the config file
+        /// </summary>
+        /// 
+        public const string SectionName = "ReportUtilitySettingsSection";
+
         [ConfigurationProperty("", IsDefaultCollection = true)]
         public NameValueConfigurationCollection Settings
         {

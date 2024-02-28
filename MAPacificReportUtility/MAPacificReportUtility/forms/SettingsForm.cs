@@ -101,6 +101,10 @@ namespace MAPacificReportUtility.forms
                 {
                     pathExist = true;
                 }
+                else //Generate a MessageBox to notify the user that thise file does not exist
+                {
+                    MessageBox.Show($"BranchInfo.xml does not exist in the following location: {path}{System.IO.Path.DirectorySeparatorChar}","Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
 
             }
 
